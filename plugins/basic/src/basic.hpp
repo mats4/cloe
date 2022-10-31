@@ -102,6 +102,26 @@ struct AccConfiguration : public Confable {
   }
 };
 
+struct ParkingConfiguration : public Confable {
+  std::string ego_sensor = to_string(CloeComponent::DEFAULT_EGO_SENSOR);
+  std::string world_sensor = to_string(CloeComponent::DEFAULT_WORLD_SENSOR);
+  std::string steering_actuator = to_string(CloeComponent::DEFAULT_STEERING_ACTUATOR);
+  std::string gearbox_actuator = to_string(CloeComponent::DEFAULT_GEARBOX_ACTUATOR);
+  std::string pedal_actuator = to_string(CloeComponent::DEFAULT_PEDAL_ACTUATOR);
+
+  bool enabled{true};
+  bool activated{false};
+
+  CONFABLE_SCHEMA(ParkingConfiguration) {
+    // clang-format off
+    return Schema{
+        {"enabled",                        Schema(&enabled, "whether parking is enabled")},
+        {"activated",                      Schema(&activated, "whether parking is activated")},
+    };
+    // clang-format on
+  }
+};
+
 struct AebConfiguration : public Confable {
   bool enabled = true;
   std::string ego_sensor = to_string(CloeComponent::DEFAULT_EGO_SENSOR);
@@ -150,12 +170,14 @@ struct BasicConfiguration : public Confable {
   AccConfiguration acc;
   AebConfiguration aeb;
   LkaConfiguration lka;
+  ParkingConfiguration park;
 
   void to_json(Json& j) const override {
     j = Json{
         {"acc", acc},
         {"aeb", aeb},
         {"lka", lka},
+        {"park", park},
     };
   }
 
@@ -164,6 +186,7 @@ struct BasicConfiguration : public Confable {
         {"acc", Schema(&acc, "ACC configuration")},
         {"aeb", Schema(&aeb, "AEB configuration")},
         {"lka", Schema(&lka, "LKA configuration")},
+        {"park", Schema(&park, "Parking configuration")},
     };
   }
 };

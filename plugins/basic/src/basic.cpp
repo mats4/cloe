@@ -31,10 +31,15 @@
 
 #include <boost/optional.hpp>  // for optional<>
 
+#include <cloe/component/gearbox_actuator.hpp>          // for GearboxActuator
 #include <cloe/component/latlong_actuator.hpp>          // for LatLongActuator
 #include <cloe/component/object_sensor.hpp>             // for ObjectSensor
+#include <cloe/component/pedal_actuator.hpp>            // for PedalActuator
+#include <cloe/component/steering_actuator.hpp>         // for SteeringActuator
 #include <cloe/component/utility/ego_sensor_canon.hpp>  // for EgoSensor, EgoSensorCanon
+#include <cloe/conf/action.hpp>                         // for ConfigureFactory
 #include <cloe/controller.hpp>                          // for Controller, Json, etc.
+#include <cloe/core.hpp>                                // for Logger
 #include <cloe/handler.hpp>                             // for ToJson, FromConf
 #include <cloe/models.hpp>                              // for CloeComponent
 #include <cloe/plugin.hpp>                              // for EXPORT_CLOE_PLUGIN
@@ -349,10 +354,135 @@ struct AutoEmergencyBraking {
   bool full_stop_activated{false};
 };
 
+struct Parking {
+  explicit Parking(const ParkingConfiguration& c) : config(c){};
+
+  bool object_is_moving(const cloe::Object& object) {
+    return object.velocity.norm() > 0.01 ? true : false;
+  }
+
+  bool object_in_critical_distance(const cloe::Object& object) {
+    return utility::is_object_aft(object) && (utility::distance_starboard(object) > -0.5);
+  }
+
+  // simply check if driving object is behind rear right of us
+  bool parking_gap_available(const cloe::Objects& objects) {
+    for (const auto object : objects) {
+      if (object_in_critical_distance(*object) && object_is_moving(*object)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  void control(Vehicle& v, const Sync& sync) {
+    cloe::logger::get("cloe")->info("in parking control");
+    if (!config.enabled) {
+      return;
+    }
+    auto world_sensor = v.get<ObjectSensor>(config.world_sensor);
+    auto objects = world_sensor->sensed_objects();
+    auto ego = utility::EgoSensorCanon(v.get<EgoSensor>(config.ego_sensor));
+    auto ego_vel_kmph = ego.velocity_as_kmph();
+    auto ego_vel_mps = ego.velocity_as_mps();
+    auto steering_actuator = v.get<SteeringActuator>(config.steering_actuator);
+    auto gearbox_actuator = v.get<GearboxActuator>(config.gearbox_actuator);
+    auto pedal_actuator = v.get<PedalActuator>(config.pedal_actuator);
+
+    auto pid_control = [&](double deviation, double kp, double kd, double ki,
+                           double& deviation_last, double& uki_last) {
+      std::chrono::duration<double> time_step = sync.step_width();
+      double ukp = kp * deviation;
+      double uki = ki * (uki_last + time_step.count() * deviation);
+      // anti windup
+      if (uki > 1.0) {
+        uki = 1.0 / ki;
+      } else if (uki < -1.0) {
+        uki = -1.0 / ki;
+      } else {  // intentionally empty
+      }
+      cloe::logger::get("cloe")->info("deviation {}", deviation);
+      cloe::logger::get("cloe")->info("time step count {}", time_step.count());
+      cloe::logger::get("cloe")->info("ukp {}", ukp);
+      cloe::logger::get("cloe")->info("uki {}", uki);
+
+      double ukd = kd * (deviation - deviation_last);
+
+      cloe::logger::get("cloe")->info("ukd {}", ukd);
+      uki_last = uki_last + time_step.count() * deviation;
+      deviation_last = deviation;
+      return (ukp + ukd + uki);
+    };
+
+    if (ego_vel_kmph < 0.1 && config.activated) {
+      cloe::logger::get("cloe")->info("parking maneuver triggered");
+      parking_maneuver_started_ = true;
+      if (parking_gap_available(objects)) {
+        //
+        //actuator->set_gear_transmission(-1);
+
+      } else {
+        //logger()->info("parking gap not found");
+      }
+    }
+
+    Eigen::Vector3d ypr = ego.sensed_state().pose.rotation().matrix().eulerAngles(2, 1, 0);
+    // calculate yaw, pitch, roll of ego in rad
+    double yaw_angle = ypr(0);
+
+    if (parking_maneuver_started_) {
+      double deviation = 1 - ego_vel_mps;
+      auto control_value = pid_control(deviation, kp, kd, ki, deviation_last, uki_last);
+      cloe::logger::get("cloe")->info("parking control value {}", control_value);
+
+      // limit to +-1
+      double lim_control_value = std::min(1.0, std::max(-1.0, control_value));
+      cloe::logger::get("cloe")->info("parking control value {}", lim_control_value);
+
+      if (lim_control_value > 0) {
+        pedal_actuator->set(PedalRequest{lim_control_value, 0.0});
+      } else {
+        pedal_actuator->set(PedalRequest{0.0, lim_control_value});
+      }
+
+      steering_actuator->set(SteeringRequest{-0.528, 0.0});
+      cloe::logger::get("cloe")->info("yaw rate {}", ypr(0));
+
+      gearbox_actuator->set(GearboxRequest{-1});
+      cloe::logger::get("cloe")->info("gear box set to -1");
+    }
+
+    // auto ego_sensor = v.get<EgoSensor>(config.ego_sensor);
+    // auto x = ego_sensor->sensed_state().velocity.x();
+    // auto y = ego_sensor->sensed_state().velocity.y();
+
+    // cloe::logger::get("cloe")->info("ego vel kmh {}", ego_vel_kmph);
+    // cloe::logger::get("cloe")->info("ego vel mps {}", ego_vel_mps);
+    // cloe::logger::get("cloe")->info("ego vel x {}", x);
+    // cloe::logger::get("cloe")->info("ego vel y {}", y);
+
+    // if yaw angle reaches 90 degrees, then end park maneuver
+    if (yaw_angle > 1.5 && yaw_angle < 2.8 && parking_maneuver_started_) {
+      cloe::logger::get("cloe")->info("parking ended");
+      parking_maneuver_started_ = false;  // no more actuation
+    }
+  }
+
+  double uki_last{0.0};
+  double deviation_last{0.0};
+
+  double kd{0.1};
+  double ki{0.002};
+  double kp{0.3};
+
+  bool parking_maneuver_started_{false};
+  ParkingConfiguration config;
+};
+
 class BasicController : public Controller {
  public:
   BasicController(const std::string& name, const BasicConfiguration& c)
-      : Controller(name), acc_(c.acc), aeb_(c.aeb), lka_(c.lka) {
+      : Controller(name), acc_(c.acc), aeb_(c.aeb), lka_(c.lka), park_(c.park) {
     // Define the HMI of the basic controller:
     namespace contact = utility::contact;
     acc_.add_hmi(hmi_);
@@ -368,12 +498,15 @@ class BasicController : public Controller {
 
   void enroll(Registrar& r) override {
     r.register_action(std::make_unique<utility::ContactFactory<Duration>>(&hmi_));
+    r.register_action(std::make_unique<cloe::actions::ConfigureFactory>(&park_.config, "park",
+                                                                        "configure park actions"));
 
     // clang-format off
     r.register_api_handler("/configuration", HandlerType::BUFFERED, handler::ToJson<BasicController>(this));
     r.register_api_handler("/configuration/acc", HandlerType::DYNAMIC, handler::FromConf(&acc_.config));
     r.register_api_handler("/configuration/aeb", HandlerType::DYNAMIC, handler::FromConf(&aeb_.config));
     r.register_api_handler("/configuration/lka", HandlerType::DYNAMIC, handler::FromConf(&lka_.config));
+    r.register_api_handler("/configuration/park", HandlerType::DYNAMIC, handler::FromConf(&park_.config));
     r.register_api_handler("/state", HandlerType::BUFFERED, handler::ToJson<AdaptiveCruiseControl>(&acc_));
     r.register_api_handler("/hmi", HandlerType::BUFFERED, handler::ToJson<utility::ContactMap<Duration>>(&hmi_));
     r.register_api_handler("/hmi/set", HandlerType::DYNAMIC, handler::FromConf(&hmi_));
@@ -400,6 +533,7 @@ class BasicController : public Controller {
     acc_.control(*veh_, sync);
     lka_.control(*veh_, sync);
     aeb_.control(*veh_, sync);
+    park_.control(*veh_, sync);
 
     return sync.time();
   }
@@ -409,6 +543,7 @@ class BasicController : public Controller {
         {"acc", c.acc_.config},
         {"aeb", c.aeb_.config},
         {"lka", c.lka_.config},
+        {"park", c.park_.config},
     };
   }
 
@@ -416,6 +551,7 @@ class BasicController : public Controller {
   AdaptiveCruiseControl acc_;
   AutoEmergencyBraking aeb_;
   LaneKeepingAssistant lka_;
+  Parking park_;
   utility::ContactMap<Duration> hmi_;
 };
 
