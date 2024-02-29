@@ -34,16 +34,24 @@
 #include <cloe/sync.hpp>                     // for Sync
 #include <cloe/trigger/set_action.hpp>       // for actions::SetVariableActionFactory
 #include "frustum_culling_conf.hpp"          // for FrustumCullingConf
+#include "frustum_culling_utility.hpp"  // for is_object_inside_polygon and calculate_corner_points
 
 namespace cloe {
 
 namespace component {
 
+/// @brief This class rotates objects to the coordinate system of a different sensor
+///
+/// @details An object given in coordinate system c1 is converted to an object in coordinate system c2 via the configured reference frame in the configuration.
+///          The reference frame configuration expects the values from c1 to c2,
+///          e.g. if c2 is rotated by 90 degrees in mathematic positive direction from c1, the yaw should be set to +90 degree (in radians)
+///          Analoguely, if the origin of c2 is translated 5 m in positive x direction from c1, the configuration should be set to +5 m.
+///          The class considers first the translation in the original coordinate system (c1) and then the rotation.
 class ObjectFrustumCulling : public ObjectSensor {
  public:
   ObjectFrustumCulling(const std::string& name, const FrustumCullingConf& conf,
                        std::shared_ptr<ObjectSensor> obs)
-      : ObjectSensor(name), config_(conf), sensor_(obs) {}
+      : ObjectSensor(name), config_(conf), sensor_(obs), cached_(false) {}
 
   virtual ~ObjectFrustumCulling() noexcept = default;
 
@@ -53,8 +61,20 @@ class ObjectFrustumCulling : public ObjectSensor {
     }
     for (const auto& o : sensor_->sensed_objects()) {
       auto obj = apply_frustum_culling(o);
+      auto corner_points = calculate_corner_points_in_frustum_coordinates(config_.frustum);
+      
+      // rotate points by frustum offset_h
+      std::vector<Point> rotated_points;
+      for (const auto& point : corner_points)
+      {
+        rotated_points.push_back(rotate_point(point, config_.frustum.offset_h));
+      }
+
       if (obj) {
-        objects_.push_back(obj);
+        bool is_inside_fov = is_object_inside_polygon(*obj, rotated_points);
+        if (is_inside_fov) {
+          objects_.push_back(obj);
+        }
       }
     }
     cached_ = true;
@@ -106,7 +126,15 @@ class ObjectFrustumCulling : public ObjectSensor {
  protected:
   std::shared_ptr<Object> apply_frustum_culling(const std::shared_ptr<Object>& o) const {
     auto obj = std::make_shared<Object>(*o);
-    // TODO(tobias): transform coordinate system and check if inside frustum
+    
+    // // Assumption: 
+    // // * cog_offset is in detected objects coordinate system
+    // // * dimensions is in absolute values and not provided as a vector
+    // // * the coordinate systems do not have any relative velocity/acceleration/angular velocity, both have same velocity/acceleration/angular velocity
+    obj->pose = this->mount_pose().inverse() * obj->pose;
+    obj->velocity = this->mount_pose().inverse().rotation() * obj->velocity;
+    obj->acceleration = this->mount_pose().inverse().rotation() * obj->acceleration;
+    obj->angular_velocity = this->mount_pose().inverse().rotation() * obj->angular_velocity;
     return obj;
   }
 

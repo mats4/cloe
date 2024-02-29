@@ -52,7 +52,6 @@ struct MountPose : public fable::Confable {
   }
 
   void from_conf(const fable::Conf& c) override {
-    Confable::from_conf(c);
     Eigen::Quaterniond q = cloe::utility::quaternion_from_rpy(roll, pitch, yaw);
     pose = cloe::utility::pose_from_rotation_translation(q, Eigen::Vector3d(x, y, z));
   }

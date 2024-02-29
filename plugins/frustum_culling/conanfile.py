@@ -19,9 +19,11 @@ class CloeComponentFrustumCulling(ConanFile):
     settings = "os", "compiler", "build_type", "arch"
     options = {
         "pedantic": [True, False],
+        "test_verbose": [True, False],
     }
     default_options = {
         "pedantic": True,
+        "test_verbose": False
     }
     generators = "CMakeDeps", "VirtualRunEnv"
     no_copy_source = True
@@ -41,6 +43,9 @@ class CloeComponentFrustumCulling(ConanFile):
     def requirements(self):
         self.requires(f"cloe-runtime/{self.version}@cloe/develop")
         self.requires(f"cloe-models/{self.version}@cloe/develop")
+        # self.requires(f"fable/{self.version}@cloe/develop")
+        self.requires("fmt/9.1.0")
+        # self.requires("nlohmann_json/3.11.2")
 
     def build_requirements(self):
         self.test_requires("gtest/1.13.0")
@@ -62,7 +67,10 @@ class CloeComponentFrustumCulling(ConanFile):
         if self.should_build:
             cm.build()
         if self.should_test:
-            cm.test()
+            if self.options.test_verbose:
+                cm.test(cli_args=["ARGS=-V -j1"])
+            else:
+                cm.test(cli_args=["ARGS=-j1"])
 
     def package(self):
         cm = cmake.CMake(self)
