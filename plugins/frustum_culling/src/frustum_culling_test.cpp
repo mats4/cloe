@@ -118,9 +118,7 @@ cloe::Object createDefaultObject() {
 
 TEST_F(ObjectFrustumCullingTest, test_rotation) {
   // configuration
-  fable::Conf c;
   config_.ref_frame.yaw = M_PI / 2.0;
-  config_.ref_frame.from_conf(c);
   config_.frustum.fov_h = M_PI;
   config_.frustum.clip_far = 500;
 
@@ -143,10 +141,8 @@ TEST_F(ObjectFrustumCullingTest, test_rotation) {
 
 TEST_F(ObjectFrustumCullingTest, test_translation) {
   // configuration
-  fable::Conf c;
   config_.ref_frame.x = 30.0;
   config_.ref_frame.y = 30.0;
-  config_.ref_frame.from_conf(c);
 
   config_.frustum.offset_h = M_PI;
   config_.frustum.fov_h = M_PI;
@@ -173,11 +169,9 @@ TEST_F(ObjectFrustumCullingTest, test_translation) {
 
 TEST_F(ObjectFrustumCullingTest, rotation_and_translation) {
   // configuration
-  fable::Conf c;
   config_.ref_frame.x = 30.0;
   config_.ref_frame.y = 40.0;
   config_.ref_frame.yaw = M_PI / 2.0;
-  config_.ref_frame.from_conf(c);
 
   config_.frustum.offset_h = M_PI;
   config_.frustum.fov_h = M_PI;
@@ -214,11 +208,9 @@ TEST_F(ObjectFrustumCullingTest, rotation_and_translation) {
 
 TEST_F(ObjectFrustumCullingTest, rotation_and_translation_including_obj_rotation) {
   // configuration
-  fable::Conf c;
   config_.ref_frame.x = 30.0;
   config_.ref_frame.y = 40.0;
   config_.ref_frame.yaw = M_PI / 2.0;
-  config_.ref_frame.from_conf(c);
 
   config_.frustum.offset_h = M_PI;
   config_.frustum.fov_h = M_PI;
@@ -272,11 +264,9 @@ TEST_F(ObjectFrustumCullingTest, rotation_and_translation_including_obj_rotation
 
 TEST_F(ObjectFrustumCullingTest, object_in_fov) {
   // configuration
-  fable::Conf c;
   config_.ref_frame.x = 10.0;
   config_.ref_frame.y = 10.0;
   config_.ref_frame.yaw = 0.0;
-  config_.ref_frame.from_conf(c);
 
   // cover 1 quadrant with field of view
   config_.frustum.offset_h = M_PI / 4.0;
@@ -303,11 +293,9 @@ TEST_F(ObjectFrustumCullingTest, object_in_fov) {
 
 TEST_F(ObjectFrustumCullingTest, object_outside_fov) {
   // configuration
-  fable::Conf c;
   config_.ref_frame.x = 10.0;
   config_.ref_frame.y = 10.0;
   config_.ref_frame.yaw = 0.0;
-  config_.ref_frame.from_conf(c);
 
   // cover 1 quadrant with field of view
   config_.frustum.offset_h = M_PI / 4.0;
@@ -331,11 +319,9 @@ TEST_F(ObjectFrustumCullingTest, object_outside_fov) {
 
 TEST_F(ObjectFrustumCullingTest, velocity) {
   // configuration
-  fable::Conf c;
   config_.ref_frame.x = 10.0;
   config_.ref_frame.y = 10.0;
-  config_.ref_frame.yaw = M_PI/2.0;
-  config_.ref_frame.from_conf(c);
+  config_.ref_frame.yaw = M_PI / 2.0;
 
   // cover 1 quadrant with field of view
   config_.frustum.offset_h = 0.0;
@@ -360,8 +346,7 @@ TEST_F(ObjectFrustumCullingTest, velocity) {
     EXPECT_NEAR(objects.front()->angular_velocity.y(), 1.0, 0.01);
     EXPECT_NEAR(objects.front()->dimensions.x(), 4.0, 0.01);
     EXPECT_NEAR(objects.front()->dimensions.y(), 2.0, 0.01);
-  }
-  else{
-     FAIL() << "Expected at least 1 object";
+  } else {
+    FAIL() << "Expected at least 1 object";
   }
 }

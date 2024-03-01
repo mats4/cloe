@@ -51,7 +51,9 @@ class ObjectFrustumCulling : public ObjectSensor {
  public:
   ObjectFrustumCulling(const std::string& name, const FrustumCullingConf& conf,
                        std::shared_ptr<ObjectSensor> obs)
-      : ObjectSensor(name), config_(conf), sensor_(obs), cached_(false) {}
+      : ObjectSensor(name), config_(conf), sensor_(obs), cached_(false) {
+    config_.ref_frame.convert();
+  }
 
   virtual ~ObjectFrustumCulling() noexcept = default;
 
