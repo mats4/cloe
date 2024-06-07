@@ -1,8 +1,14 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index de03a73..ff8642e 100644
+index de03a73..980f32f 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -14,7 +14,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
+@@ -9,12 +9,12 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+ endif()
+ 
+ # Set the C++ standard
+-set(CMAKE_CXX_STANDARD 11)
++set(CMAKE_CXX_STANDARD 14)
+ set(CMAKE_CXX_STANDARD_REQUIRED ON)
  
  # Optional Flatbuffer support
  option(OSI_BUILD_FLATBUFFER "Build flatbuffer versions of libraries" OFF)
