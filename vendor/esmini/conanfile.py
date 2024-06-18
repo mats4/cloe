@@ -38,11 +38,11 @@ class ESMini(ConanFile):
     def configure(self):
         if self.options.with_osg:
             self.options.with_osi = True
-        if self.options.with_osi:
-            self.options["open-simulation-interface"].shared = self.options.shared
-            self.options["protobuf"].shared = True
-        self.options["open-simulation-interface"].shared = self.options.shared
-        self.options["protobuf"].shared = self.options.shared
+        # if self.options.with_osi:
+        #     self.options["open-simulation-interface"].shared = self.options.shared
+        #     self.options["protobuf"].shared = True
+        # self.options["open-simulation-interface"].shared = self.options.shared
+        # self.options["protobuf"].shared = self.options.shared
 
     def layout(self):
         # We can't use cmake_layout because ESmini *really* doesn't like stuff to
